@@ -1,0 +1,5 @@
+# IMPORTANTE: instala primero PyTorch con CUDA desde https://pytorch.org/get-started/locally/
+# (si haces solo "pip install ultralytics" en Windows, puede quedarte la versión de CPU).
+ultralytics>=8.4
+roboflow
+matplotlib
