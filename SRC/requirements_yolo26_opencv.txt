@@ -1,0 +1,17 @@
+# IMPORTANTE:
+# Instala primero PyTorch con CUDA desde:
+# https://pytorch.org/get-started/locally/
+#
+# Si no necesitas aceleración por GPU NVIDIA, puedes instalar PyTorch
+# normalmente como dependencia de Ultralytics.
+
+# Modelo YOLO26
+ultralytics>=8.4
+
+# Acceso a cámara y procesamiento de video
+opencv-python
+
+# Herramientas adicionales
+roboflow
+matplotlib
+numpy

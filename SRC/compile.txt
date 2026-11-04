@@ -1,0 +1,3 @@
+python target_trajectory_prediction.py --weights best.pt --source 0
+
+python target_trajectory_prediction.py --weights best.pt --source video.mp4 --output salida.mp4 --horizon 0.5
