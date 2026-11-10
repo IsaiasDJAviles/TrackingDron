@@ -31,6 +31,8 @@ from typing import Deque, Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
+import threading
+
 LOGGER = logging.getLogger("target_prediction")
 
 # ======================================================================================
@@ -86,6 +88,60 @@ class AppConfig:
     kalman: KalmanConfig = KalmanConfig()
     prediction: PredictionConfig = PredictionConfig()
     tracking: TrackingConfig = TrackingConfig()
+
+
+class LatestFrameCapture:
+    """Lee el stream en un hilo y entrega siempre el fotograma más reciente.
+
+    Evita que el búfer de red se llene mientras YOLO procesa (causa de cortes y de
+    latencia acumulada en streams en vivo). Descarta los fotogramas que no dio tiempo
+    de procesar.
+    """
+
+    def __init__(self, capture: cv2.VideoCapture, read_timeout: float = 5.0) -> None:
+        self._capture = capture
+        self._timeout = read_timeout
+        self._lock = threading.Lock()
+        self._new_frame = threading.Event()
+        self._frame: Optional[np.ndarray] = None
+        self._running = True
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+
+    def _reader(self) -> None:
+        while self._running:
+            ok, frame = self._capture.read()
+            with self._lock:
+                if not ok:
+                    self._running = False
+                    self._new_frame.set()
+                    return
+                self._frame = frame
+                self._new_frame.set()
+
+    def read(self):
+        if not self._running and self._frame is None:
+            return False, None
+        if not self._new_frame.wait(self._timeout):
+            return False, None
+        with self._lock:
+            frame, self._frame = self._frame, None
+            self._new_frame.clear()
+        return frame is not None, frame
+
+    def isOpened(self) -> bool:
+        return self._capture.isOpened()
+
+    def get(self, prop: int) -> float:
+        return self._capture.get(prop)
+
+    def set(self, prop: int, value: float) -> bool:
+        return self._capture.set(prop, value)
+
+    def release(self) -> None:
+        self._running = False
+        self._thread.join(timeout=2)
+        self._capture.release()
 
 
 # ======================================================================================
@@ -562,14 +618,24 @@ class FrameClock:
         return min(max(dt, self.MIN_DT), self.MAX_DT)
 
 
+_STREAM_PREFIXES = ("http://", "https://", "rtsp://", "rtmp://")
+
+
 def open_video_source(source: str) -> Tuple[cv2.VideoCapture, bool]:
-    """Abre cámara (índice numérico) o archivo. Devuelve (captura, es_en_vivo)."""
-    is_live = source.isdigit()
+    """Abre cámara (índice), stream de red (URL) o archivo. Devuelve (captura, es_en_vivo)."""
+    is_index = source.isdigit()
+    is_stream = source.lower().startswith(_STREAM_PREFIXES)
+    is_live = is_index or is_stream
     if not is_live and not Path(source).is_file():
         raise FileNotFoundError(f"No se encontró el video: {source}")
-    capture = cv2.VideoCapture(int(source) if is_live else source)
+
+    capture = cv2.VideoCapture(int(source) if is_index else source)
+    if is_live:
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # menos latencia acumulada
     if not capture.isOpened():
         raise RuntimeError(f"No se pudo abrir la fuente de video: {source}")
+    if is_live:
+        capture = LatestFrameCapture(capture)
     return capture, is_live
 
 
@@ -691,7 +757,7 @@ def run(config: AppConfig) -> None:
                 LOGGER.info("Fin del video o lectura fallida.")
                 break
 
-            result = model.track(frame, persist=True, conf=config.confidence, device=device, verbose=False, classes = 67)[0]
+            result = model.track(frame, persist=True, conf=config.confidence, device=device, verbose=False, classes = 0)[0]
             snapshots = manager.update(extract_detections(result), clock.tick())
             for snapshot in snapshots:
                 draw_target(frame, snapshot, class_names, config.prediction, config.cm_per_pixel)
