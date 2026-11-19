@@ -45,7 +45,7 @@ class KalmanConfig:
     """Parámetros del filtro. Subir `jerk_noise_density` = confía más en la medición."""
 
     measurement_std_px: float = 4.0        # ruido típico del centroide de YOLO (px)
-    jerk_noise_density: float = 5.0e3      # intensidad del ruido de proceso (px²/s⁵)
+    jerk_noise_density: float = 5.0e5      # intensidad del ruido de proceso (px²/s⁵)
     initial_velocity_std: float = 150.0    # incertidumbre inicial de velocidad (px/s)
     initial_accel_std: float = 500.0       # incertidumbre inicial de aceleración (px/s²)
 
@@ -757,7 +757,7 @@ def run(config: AppConfig) -> None:
                 LOGGER.info("Fin del video o lectura fallida.")
                 break
 
-            result = model.track(frame, persist=True, conf=config.confidence, device=device, verbose=False, classes = 0)[0]
+            result = model.track(frame, persist=True, conf=config.confidence, device=device, verbose=False, classes = 39)[0]
             snapshots = manager.update(extract_detections(result), clock.tick())
             for snapshot in snapshots:
                 draw_target(frame, snapshot, class_names, config.prediction, config.cm_per_pixel)
