@@ -757,7 +757,7 @@ def run(config: AppConfig) -> None:
                 LOGGER.info("Fin del video o lectura fallida.")
                 break
 
-            result = model.track(frame, persist=True, conf=config.confidence, device=device, verbose=False, classes = 39)[0]
+            result = model.track(frame, persist=True, conf=config.confidence, device=device, verbose=False)[0]
             snapshots = manager.update(extract_detections(result), clock.tick())
             for snapshot in snapshots:
                 draw_target(frame, snapshot, class_names, config.prediction, config.cm_per_pixel)
